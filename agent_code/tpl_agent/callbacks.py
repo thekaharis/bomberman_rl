@@ -1,6 +1,7 @@
 import os
 import pickle
 import random
+import copy
 
 import numpy as np
 
@@ -70,10 +71,129 @@ def state_to_features(game_state: dict) -> np.array:
     if game_state is None:
         return None
 
-    # For example, you could construct several channels of equal shape, ...
-    channels = []
-    channels.append(...)
-    # concatenate them as a feature tensor (they must have the same shape), ...
-    stacked_channels = np.stack(channels)
-    # and return them as a vector
-    return stacked_channels.reshape(-1)
+    round_ = game_state['round']
+    step = game_state['step']
+    field = game_state['field']
+    bombs = [g[0] for g in game_state['bombs']]
+    bombs_timers = [g[1] for g in game_state['bombs']]
+    explosion_map = game_state['explosion_map']
+    coins = game_state['coins']
+    others = game_state['others']
+    n, s, b, (x,y) = game_state['self']
+
+    # ! determine nearest wall, crate, coin, bomb in any direction (99 if no bomb/coin/crate)
+    env = [None, None, None, None]
+    env[0] = find_items((x,y), 'UP', field, bombs, coins, explosion_map)
+    env[1] = find_items((x,y), 'RIGHT', field, bombs, coins, explosion_map)
+    env[2] = find_items((x,y), 'DOWN', field, bombs, coins, explosion_map)
+    env[3] = find_items((x,y), 'LEFT', field, bombs, coins, explosion_map)
+    
+    return env
+
+def find_items(coord:(int, int), direction: str, field, bombs, coins, explosion_map, step_limit = 99):
+    if direction == 'UP' or direction == 'DOWN':
+        temp = copy.copy(coord[1])
+        t_coord = (coord[0], temp)
+    else:
+        temp = copy.copy(coord[0])
+        t_coord = (temp, coord[1])
+
+    if direction == 'LEFT' or direction == 'DOWN':
+        adjust = lambda x: x - 1
+    else:
+        adjust = lambda x: x + 1
+
+    nearest_walls = 99
+    nearest_crates = 99
+    nearest_coins = 99
+    nearest_bombs = 99
+    nearest_explosions = 99
+
+    found_bomb = False
+    found_coin = False
+    found_explosion = False
+
+    steps = 0
+    while temp != 0 and temp != 16 and field[t_coord] == 0 and steps < step_limit:
+        steps += 1
+        temp = adjust(temp)
+        if direction == "LEFT" or direction == "RIGHT":
+            t_coord = (adjust(t_coord[0]), t_coord[1])
+        else:
+            t_coord = (t_coord[0], adjust(t_coord[1]))
+
+        if found_coin == False and t_coord in coins: 
+            found_coin = True 
+            nearest_coins = abs(t_coord[0] - coord[0] + t_coord[1] - coord[1])
+
+        if found_bomb == False and t_coord in bombs: 
+            found_bomb = True
+            nearest_bombs = abs(t_coord[0] - coord[0] + t_coord[1] - coord[1])
+            
+        if found_explosion == False and explosion_map[t_coord] != 0: 
+            found_explosion= True
+            nearest_explosions = abs(t_coord[0] - coord[0] + t_coord[1] - coord[1])*explosion_map[t_coord]
+
+        if field[t_coord] == 1:
+            nearest_crates = abs(t_coord[0] - coord[0] + t_coord[1] - coord[1])
+        elif field[t_coord] == -1:
+            nearest_walls = abs(t_coord[0] - coord[0] + t_coord[1] - coord[1])
+    
+    return nearest_walls, nearest_crates, nearest_coins, nearest_bombs, nearest_explosions
+
+
+
+
+
+def test_functions():    
+    test_state = {
+                'round':1, 
+                'step':1, 
+                'field':np.array([
+                    [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1],
+                    [-1,  0,  0,  1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 , 0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1,  0, -1],
+                    [-1,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0, -1],
+                    [-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1]
+                ]),
+                'bombs':[((12,3), 2), ((14,7), 2), ((11,5),2)],
+                'explosion_map':np.array([
+                    [0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0. ,0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.],
+                    [0. ,0. ,0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0., 0.]
+                ]),
+                'coins':[(5, 1), (3, 10), (5, 14), (9, 1), (9, 7), (10, 11), (11, 3), (13, 9), (13, 14)],
+                'self':('haris_agent', 0, True, (11, 7)),
+                'others':[('random_agent_0', 0, True, (1, 15)), ('random_agent_1', 0, True, (15, 15)), ('random_agent_2', 0, True, (1, 1))]
+    }
+
+    print(state_to_features(test_state))
+
+    
+test_functions()
